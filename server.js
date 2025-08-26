@@ -1,43 +1,30 @@
-import express from 'express';
-import http from 'http';
-import { WebSocketServer } from 'ws';
-import path from 'path';
+// server.js
 
-const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const WebSocket = require('ws');
 
-app.use(express.static(path.join(process.cwd(), 'public')));
+// Запускаем WebSocket сервер на порту 8080
+const wss = new WebSocket.Server({ port: 8080 });
 
-let clients = [];
+console.log('Простой сигнальный WS сервер запущен на порту 8080');
 
-wss.on('connection', (ws) => {
-  clients.push(ws);
-  console.log('Client connected. Total:', clients.length);
+wss.on('connection', ws => {
+  console.log('Клиент подключился');
 
-  ws.on('message', (msg) => {
-    const data = JSON.parse(msg);
-
-    if (data.type === 'ready') {
-      if (clients.length === 2) {
-        // Назначаем роли
-        clients[0].send(JSON.stringify({ type: 'start', role: 'caller' }));
-        clients[1].send(JSON.stringify({ type: 'start', role: 'callee' }));
+  ws.on('message', message => {
+    // Получаем сообщение и пересылаем его всем, кроме отправителя
+    console.log('Получено сообщение =>', message.toString());
+    wss.clients.forEach(client => {
+      if (client !== ws && client.readyState === WebSocket.OPEN) {
+        client.send(message.toString());
       }
-    } else {
-      // Пересылаем сообщения другому клиенту
-      clients.forEach(c => {
-        if (c !== ws && c.readyState === ws.OPEN) {
-          c.send(msg);
-        }
-      });
-    }
+    });
   });
 
   ws.on('close', () => {
-    clients = clients.filter(c => c !== ws);
+    console.log('Клиент отключился');
+  });
+
+  ws.on('error', error => {
+    console.error('Ошибка WebSocket:', error);
   });
 });
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('Server running on port', PORT));
